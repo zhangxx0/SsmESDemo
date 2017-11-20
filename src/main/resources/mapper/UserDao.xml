@@ -1,0 +1,37 @@
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.danke.dao.UserDemoDao">
+    <!--目的:为dao接口方法提供sql语句配置
+    即针对dao接口中的方法编写我们的sql语句-->
+
+    <resultMap id="userDemoMap" type="UserDemo">
+        <id column="id" javaType="LONG" property="id"/>
+        <result column="user_name" jdbcType="VARCHAR" property="userName"/>
+        <result column="age" jdbcType="INTEGER" property="age"/>
+        <result column="sex" property="sex" typeHandler="com.danke.util.typehandler.SexEnumTypeHandler"/>
+        <result column="birthday" jdbcType="DATE" property="birthday"/>
+        <result column="create_date" jdbcType="TIME" property="createDate"/>
+    </resultMap>
+
+    <select id="queryAll" resultMap="userDemoMap">
+        SELECT id,user_name,age,sex,birthday,create_date
+        FROM t_user
+        ORDER BY create_date DESC
+    </select>
+
+    <!--<update id="reduceNumber">
+        UPDATE seckill
+        SET number = number-1
+        WHERE seckill_id=#{seckillId}
+        AND start_time <![CDATA[ <= ]]> #{killTime}
+        AND end_time >= #{killTime}
+        AND number > 0;
+    </update>-->
+
+    <!--<select id="queryById" resultType="Seckill" parameterType="long">
+        SELECT *
+        FROM seckill
+        WHERE seckill_id=#{seckillId}
+    </select>-->
+</mapper>
