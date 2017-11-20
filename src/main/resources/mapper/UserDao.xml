@@ -20,18 +20,4 @@
         ORDER BY create_date DESC
     </select>
 
-    <!--<update id="reduceNumber">
-        UPDATE seckill
-        SET number = number-1
-        WHERE seckill_id=#{seckillId}
-        AND start_time <![CDATA[ <= ]]> #{killTime}
-        AND end_time >= #{killTime}
-        AND number > 0;
-    </update>-->
-
-    <!--<select id="queryById" resultType="Seckill" parameterType="long">
-        SELECT *
-        FROM seckill
-        WHERE seckill_id=#{seckillId}
-    </select>-->
 </mapper>

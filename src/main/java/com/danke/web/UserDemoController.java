@@ -1,6 +1,6 @@
 package com.danke.web;
 
-import com.danke.dto.SeckillResult;
+import com.danke.dto.DemoResult;
 import com.danke.entity.UserDemo;
 import com.danke.service.UserDemoService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -43,9 +43,9 @@ public class UserDemoController {
      */
     @RequestMapping(value = "/time/now", method = RequestMethod.GET)
     @ResponseBody
-    public SeckillResult<Long> time() {
+    public DemoResult<Long> time() {
         Date date = new Date();
-        return new SeckillResult<Long>(true, date.getTime());
+        return new DemoResult<Long>(true, date.getTime());
     }
 
 

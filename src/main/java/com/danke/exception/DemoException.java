@@ -4,13 +4,13 @@ package com.danke.exception;
  * 秒杀相关的所有业务异常
  * Created by xinxin on 2017/11/4.
  */
-public class SeckillException extends RuntimeException{
+public class DemoException extends RuntimeException{
 
-    public SeckillException(String message) {
+    public DemoException(String message) {
         super(message);
     }
 
-    public SeckillException(String message, Throwable cause) {
+    public DemoException(String message, Throwable cause) {
         super(message, cause);
     }
 }
