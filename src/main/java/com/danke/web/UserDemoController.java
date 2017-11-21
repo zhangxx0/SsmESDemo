@@ -27,6 +27,7 @@ public class UserDemoController {
 
     /**
      * 获取用户列表
+     * http://localhost:8088/demo/list
      *
      * @param model
      * @return
