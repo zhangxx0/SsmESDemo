@@ -1,9 +1,16 @@
 package com.danke.web;
 
+import com.danke.util.singleton.EsClientSingleton;
 import com.fasterxml.jackson.databind.JsonMappingException;
 import org.apache.http.HttpHost;
 import org.elasticsearch.action.ActionListener;
+import org.elasticsearch.action.DocWriteRequest;
 import org.elasticsearch.action.DocWriteResponse;
+import org.elasticsearch.action.bulk.BulkItemResponse;
+import org.elasticsearch.action.bulk.BulkRequest;
+import org.elasticsearch.action.bulk.BulkResponse;
+import org.elasticsearch.action.delete.DeleteRequest;
+import org.elasticsearch.action.delete.DeleteResponse;
 import org.elasticsearch.action.get.GetRequest;
 import org.elasticsearch.action.get.GetResponse;
 import org.elasticsearch.action.index.IndexRequest;
@@ -14,6 +21,7 @@ import org.elasticsearch.action.update.UpdateRequest;
 import org.elasticsearch.action.update.UpdateResponse;
 import org.elasticsearch.client.RestClient;
 import org.elasticsearch.client.RestHighLevelClient;
+import org.elasticsearch.common.Strings;
 import org.elasticsearch.common.text.Text;
 import org.elasticsearch.common.unit.Fuzziness;
 import org.elasticsearch.common.unit.TimeValue;
@@ -28,8 +36,10 @@ import org.elasticsearch.search.Scroll;
 import org.elasticsearch.search.SearchHit;
 import org.elasticsearch.search.SearchHits;
 import org.elasticsearch.search.builder.SearchSourceBuilder;
+import org.elasticsearch.search.fetch.subphase.FetchSourceContext;
 import org.elasticsearch.search.fetch.subphase.highlight.HighlightBuilder;
 import org.elasticsearch.search.fetch.subphase.highlight.HighlightField;
+import org.elasticsearch.search.sort.FieldSortBuilder;
 import org.elasticsearch.search.sort.ScoreSortBuilder;
 import org.elasticsearch.search.sort.SortOrder;
 import org.slf4j.Logger;
@@ -76,7 +86,6 @@ public class ElasticSearchController {
         IndexResponse indexResponse = null;
         try {
             builder = XContentFactory.jsonBuilder();
-
             builder.startObject();
             {
                 builder.field("user", "zxx");
@@ -88,22 +97,8 @@ public class ElasticSearchController {
             IndexRequest indexRequest = new IndexRequest("posts", "doc", "2")
                     .source(builder);
 
-            // Optional arguments 设置Requst参数
-
             // Synchronous Execution 同步调用
             indexResponse = client.index(indexRequest);
-
-            // Asynchronous Execution 异步调用
-            /*client.indexAsync(indexRequest, new ActionListener<IndexResponse>() {
-                @Override
-                public void onResponse(IndexResponse indexResponse) {
-
-                }
-                @Override
-                public void onFailure(Exception e) {
-
-                }
-            });*/
 
             String index = indexResponse.getIndex();
             String type = indexResponse.getType();
@@ -124,6 +119,7 @@ public class ElasticSearchController {
                     logger.error("+++ " + reason);
                 }
             }
+
             client.close();
 
         } catch (IOException e) {
@@ -132,7 +128,6 @@ public class ElasticSearchController {
         return indexResponse;
 
     }
-
 
     /**
      * 更新
@@ -166,19 +161,6 @@ public class ElasticSearchController {
             // 同步调用
             updateResponse = client.update(request);
 
-            // 异步调用
-            /*client.updateAsync(request, new ActionListener<UpdateResponse>() {
-                @Override
-                public void onResponse(UpdateResponse updateResponse) {
-
-                }
-
-                @Override
-                public void onFailure(Exception e) {
-
-                }
-            });*/
-
             String index = updateResponse.getIndex();
             String type = updateResponse.getType();
             String id = updateResponse.getId();
@@ -190,7 +172,7 @@ public class ElasticSearchController {
             } else if (updateResponse.getResult() == DocWriteResponse.Result.DELETED) {
                 logger.info("+++ DELETED");
             } else if (updateResponse.getResult() == DocWriteResponse.Result.NOOP) {
-                logger.info("+++ NOOP"); // ??? 啥意思
+                logger.info("+++ NOOP"); // 空操作
             }
 
             // When the source retrieval is enabled in the UpdateRequest through the fetchSource method,
@@ -218,7 +200,6 @@ public class ElasticSearchController {
         return updateResponse;
     }
 
-
     /**
      * GET
      * http://localhost:8088/es/get
@@ -233,7 +214,15 @@ public class ElasticSearchController {
                 RestClient.builder(
                         new HttpHost("localhost", 9200, "http")));
 
+
         GetRequest getRequest = new GetRequest("posts", "doc", "2");
+
+        // 查询字段过滤
+        String[] includes = new String[]{"user", "*Date"};
+        String[] excludes = Strings.EMPTY_ARRAY;
+        FetchSourceContext fetchSourceContext = new FetchSourceContext(true, includes, excludes);
+        getRequest.fetchSourceContext(fetchSourceContext);
+
         GetResponse getResponse = null;
 
         try {
@@ -261,6 +250,49 @@ public class ElasticSearchController {
 
     }
 
+    /**
+     * DELETE
+     *
+     * @return
+     */
+    @RequestMapping("/del")
+    @ResponseBody
+    public DeleteResponse delete() {
+
+        RestHighLevelClient client = new RestHighLevelClient(
+                RestClient.builder(
+                        new HttpHost("localhost", 9200, "http")));
+
+        DeleteRequest request = new DeleteRequest(
+                "posts",
+                "doc",
+                "2");
+        DeleteResponse deleteResponse = null;
+        try {
+            deleteResponse = client.delete(request);
+
+            String index = deleteResponse.getIndex();
+            String type = deleteResponse.getType();
+            String id = deleteResponse.getId();
+            long version = deleteResponse.getVersion();
+            logger.info("+++ delete doc id：" + id);
+            ReplicationResponse.ShardInfo shardInfo = deleteResponse.getShardInfo();
+            if (shardInfo.getTotal() != shardInfo.getSuccessful()) {
+
+            }
+            if (shardInfo.getFailed() > 0) {
+                for (ReplicationResponse.ShardInfo.Failure failure : shardInfo.getFailures()) {
+                    String reason = failure.reason();
+                }
+            }
+
+            client.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+        return deleteResponse;
+    }
 
     /**
      * Search API
@@ -269,7 +301,7 @@ public class ElasticSearchController {
      */
     @RequestMapping("/search")
     @ResponseBody
-    public SearchResponse search(){
+    public SearchResponse search() {
         RestHighLevelClient client = new RestHighLevelClient(
                 RestClient.builder(
                         new HttpHost("localhost", 9200, "http")));
@@ -278,25 +310,31 @@ public class ElasticSearchController {
         SearchRequest searchRequest = new SearchRequest();
         SearchResponse searchResponse = null;
         try {
+            // Using the SearchSourceBuilder
             SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
-//        searchSourceBuilder.query(QueryBuilders.termQuery("user", "kimchy"));
-//            searchSourceBuilder.from(0);
-//            searchSourceBuilder.size(3);
-//            searchSourceBuilder.timeout(new TimeValue(60, TimeUnit.SECONDS));
+            //        searchSourceBuilder.query(QueryBuilders.termQuery("user", "kimchy"));
+            //            searchSourceBuilder.from(0);
+            //            searchSourceBuilder.size(3);
+            //            searchSourceBuilder.timeout(new TimeValue(60, TimeUnit.SECONDS));
+            //        searchSourceBuilder.query(QueryBuilders.matchAllQuery());
 
-//        searchSourceBuilder.query(QueryBuilders.matchAllQuery());
-
-            MatchQueryBuilder matchQueryBuilder = new MatchQueryBuilder("user", "kimchy");
-//        matchQueryBuilder.fuzziness(Fuzziness.AUTO);
-//        matchQueryBuilder.prefixLength(3);
-//        matchQueryBuilder.maxExpansions(10);
-
+            // Building queries   supported by Elasticsearch’s Query DSL.
+            // fluent programming style
+            MatchQueryBuilder matchQueryBuilder = new MatchQueryBuilder("user", "kimchy")
+                .fuzziness(Fuzziness.AUTO) // 模糊
+                .prefixLength(3)
+                .maxExpansions(10);
             searchSourceBuilder.query(matchQueryBuilder);
 
+            // Specifying Sorting
             searchSourceBuilder.sort(new ScoreSortBuilder().order(SortOrder.DESC));
+            searchSourceBuilder.sort(new FieldSortBuilder("_uid").order(SortOrder.ASC));
 
-            // Source filtering 这个东西是干嘛用的？ 2017年11月21日11:53:59
-            // searchSourceBuilder.fetchSource(false);
+            // Source filtering 过滤查询字段
+            searchSourceBuilder.fetchSource(false);
+            String[] includeFields = new String[] {"user", "message"};
+            String[] excludeFields = new String[] {"reason"};
+            searchSourceBuilder.fetchSource(includeFields, excludeFields);
 
             // Requesting Highlighting
             /**
@@ -314,7 +352,6 @@ public class ElasticSearchController {
 
             // Requesting Aggregations
             // Requesting Suggestions
-            //
 
             searchRequest.source(searchSourceBuilder);
 
@@ -419,8 +456,8 @@ public class ElasticSearchController {
             scrollId = searchResponse.getScrollId();
             searchHits = searchResponse.getHits().getHits();
 
-            logger.info("+++ scrollId:" +scrollId);
-            logger.info("+++ searchHits:" +searchHits.toString());
+            logger.info("+++ scrollId:" + scrollId);
+            logger.info("+++ searchHits:" + searchHits.toString());
         }
 
         ClearScrollRequest clearScrollRequest = new ClearScrollRequest();
@@ -433,5 +470,45 @@ public class ElasticSearchController {
         return searchResponse;
     }
 
+    /**
+     * 批量处理
+     *
+     * @return
+     * @date 2017年12月11日19:42:24
+     */
+    @RequestMapping("/bulk")
+    @ResponseBody
+    public BulkResponse bulk() throws IOException {
+
+        RestHighLevelClient client = new RestHighLevelClient(
+                RestClient.builder(
+                        new HttpHost("localhost", 9200, "http")));
+
+        BulkRequest request = new BulkRequest();
+        request.add(new DeleteRequest("posts", "doc", "3"));
+        request.add(new UpdateRequest("posts", "doc", "4")
+                .doc(XContentType.JSON, "user", "test4"));
+        request.add(new IndexRequest("posts", "doc", "5")
+                .source(XContentType.JSON, "user", "baz"));
+
+        BulkResponse bulkResponse = client.bulk(request);
+        for (BulkItemResponse bulkItemResponse : bulkResponse) {
+            DocWriteResponse itemResponse = bulkItemResponse.getResponse();
+
+            if (bulkItemResponse.getOpType() == DocWriteRequest.OpType.INDEX
+                    || bulkItemResponse.getOpType() == DocWriteRequest.OpType.CREATE) {
+                IndexResponse indexResponse = (IndexResponse) itemResponse;
+                logger.info(indexResponse.toString());
+            } else if (bulkItemResponse.getOpType() == DocWriteRequest.OpType.UPDATE) {
+                UpdateResponse updateResponse = (UpdateResponse) itemResponse;
+                logger.info(updateResponse.toString());
+            } else if (bulkItemResponse.getOpType() == DocWriteRequest.OpType.DELETE) {
+                DeleteResponse deleteResponse = (DeleteResponse) itemResponse;
+                logger.info(deleteResponse.toString());
+            }
+        }
+
+        return null;
+    }
 
 }
