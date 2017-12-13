@@ -1,10 +1,8 @@
 package com.danke.web;
 
-import com.danke.util.singleton.EsClientSingleton;
-import com.fasterxml.jackson.databind.JsonMappingException;
-import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 import org.apache.http.HttpHost;
-import org.elasticsearch.action.ActionListener;
+import org.elasticsearch.Build;
+import org.elasticsearch.Version;
 import org.elasticsearch.action.DocWriteRequest;
 import org.elasticsearch.action.DocWriteResponse;
 import org.elasticsearch.action.bulk.BulkItemResponse;
@@ -16,12 +14,14 @@ import org.elasticsearch.action.get.GetRequest;
 import org.elasticsearch.action.get.GetResponse;
 import org.elasticsearch.action.index.IndexRequest;
 import org.elasticsearch.action.index.IndexResponse;
+import org.elasticsearch.action.main.MainResponse;
 import org.elasticsearch.action.search.*;
 import org.elasticsearch.action.support.replication.ReplicationResponse;
 import org.elasticsearch.action.update.UpdateRequest;
 import org.elasticsearch.action.update.UpdateResponse;
 import org.elasticsearch.client.RestClient;
 import org.elasticsearch.client.RestHighLevelClient;
+import org.elasticsearch.cluster.ClusterName;
 import org.elasticsearch.common.Strings;
 import org.elasticsearch.common.text.Text;
 import org.elasticsearch.common.unit.Fuzziness;
@@ -40,7 +40,6 @@ import org.elasticsearch.search.builder.SearchSourceBuilder;
 import org.elasticsearch.search.fetch.subphase.FetchSourceContext;
 import org.elasticsearch.search.fetch.subphase.highlight.HighlightBuilder;
 import org.elasticsearch.search.fetch.subphase.highlight.HighlightField;
-import org.elasticsearch.search.sort.FieldSortBuilder;
 import org.elasticsearch.search.sort.ScoreSortBuilder;
 import org.elasticsearch.search.sort.SortOrder;
 import org.slf4j.Logger;
@@ -51,19 +50,20 @@ import org.springframework.web.bind.annotation.ResponseBody;
 
 import java.io.IOException;
 import java.util.Date;
-import java.util.List;
 import java.util.Map;
-import java.util.concurrent.TimeUnit;
 
 /**
  * ElasticSearch Controller
  *
+ * @author zhang.xx
  * @date 2017年11月20日17:26:59
  */
 @Component
 @RequestMapping("//es")
 public class ElasticSearchController {
-    //日志对象
+    /**
+     *    日志对象
+     */
     private Logger logger = LoggerFactory.getLogger(this.getClass());
 
     /**
@@ -173,7 +173,8 @@ public class ElasticSearchController {
             } else if (updateResponse.getResult() == DocWriteResponse.Result.DELETED) {
                 logger.info("+++ DELETED");
             } else if (updateResponse.getResult() == DocWriteResponse.Result.NOOP) {
-                logger.info("+++ NOOP"); // 空操作
+                // 空操作
+                logger.info("+++ NOOP");
             }
 
             // When the source retrieval is enabled in the UpdateRequest through the fetchSource method,
@@ -181,7 +182,8 @@ public class ElasticSearchController {
             if (updateResponse != null) {
                 GetResult result = updateResponse.getGetResult();
                 if (result != null) {
-                    if (result.isExists()) { // 官网给的这个判定条件好像有问题啊，在此之前result就已经是null的情况下，这里会报控制针的错误
+                    // 官网给的这个判定条件好像有问题啊，在此之前result就已经是null的情况下，这里会报控制针的错误
+                    if (result.isExists()) {
                         String sourceAsString = result.sourceAsString();
                         Map<String, Object> sourceAsMap = result.sourceAsMap();
                         byte[] sourceAsBytes = result.source();
@@ -320,7 +322,8 @@ public class ElasticSearchController {
         // Building queries   supported by Elasticsearch’s Query DSL.
         // fluent programming style
         MatchQueryBuilder matchQueryBuilder = new MatchQueryBuilder("user", "kimchy")
-                .fuzziness(Fuzziness.AUTO) // 模糊
+                // 模糊
+                .fuzziness(Fuzziness.AUTO)
                 .prefixLength(3)
                 .maxExpansions(10);
         searchSourceBuilder.query(matchQueryBuilder);
@@ -458,6 +461,7 @@ public class ElasticSearchController {
             logger.info("+++ searchHits:" + searchHits.toString());
         }
 
+        // Clear Scroll API
         ClearScrollRequest clearScrollRequest = new ClearScrollRequest();
         clearScrollRequest.addScrollId(scrollId);
         ClearScrollResponse clearScrollResponse = client.clearScroll(clearScrollRequest);
@@ -509,4 +513,22 @@ public class ElasticSearchController {
         return null;
     }
 
+    @RequestMapping("/info")
+    @ResponseBody
+    public MainResponse info() throws IOException {
+        RestHighLevelClient client = new RestHighLevelClient(
+                RestClient.builder(
+                        new HttpHost("localhost", 9200, "http")));
+
+        MainResponse response = client.info();
+        ClusterName clusterName = response.getClusterName();
+        String clusterUuid = response.getClusterUuid();
+        String nodeName = response.getNodeName();
+        Version version = response.getVersion();
+        Build build = response.getBuild();
+
+        logger.info("+++" + clusterUuid + " " + clusterName + " " + nodeName + " " + version + " " + build);
+
+        return response;
+    }
 }
