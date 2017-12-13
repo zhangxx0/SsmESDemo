@@ -2,6 +2,7 @@ package com.danke.web;
 
 import com.danke.util.singleton.EsClientSingleton;
 import com.fasterxml.jackson.databind.JsonMappingException;
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 import org.apache.http.HttpHost;
 import org.elasticsearch.action.ActionListener;
 import org.elasticsearch.action.DocWriteRequest;
@@ -301,120 +302,117 @@ public class ElasticSearchController {
      */
     @RequestMapping("/search")
     @ResponseBody
-    public SearchResponse search() {
+    public SearchResponse search() throws IOException{
         RestHighLevelClient client = new RestHighLevelClient(
                 RestClient.builder(
                         new HttpHost("localhost", 9200, "http")));
 
-        //
         SearchRequest searchRequest = new SearchRequest();
         SearchResponse searchResponse = null;
-        try {
-            // Using the SearchSourceBuilder
-            SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
-            //        searchSourceBuilder.query(QueryBuilders.termQuery("user", "kimchy"));
-            //            searchSourceBuilder.from(0);
-            //            searchSourceBuilder.size(3);
-            //            searchSourceBuilder.timeout(new TimeValue(60, TimeUnit.SECONDS));
-            //        searchSourceBuilder.query(QueryBuilders.matchAllQuery());
+        // Using the SearchSourceBuilder
+        SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
+        //        searchSourceBuilder.query(QueryBuilders.termQuery("user", "kimchy"));
+        //            searchSourceBuilder.from(0);
+        //            searchSourceBuilder.size(3);
+        //            searchSourceBuilder.timeout(new TimeValue(60, TimeUnit.SECONDS));
+        //        searchSourceBuilder.query(QueryBuilders.matchAllQuery());
 
-            // Building queries   supported by Elasticsearch’s Query DSL.
-            // fluent programming style
-            MatchQueryBuilder matchQueryBuilder = new MatchQueryBuilder("user", "kimchy")
+        // Building queries   supported by Elasticsearch’s Query DSL.
+        // fluent programming style
+        MatchQueryBuilder matchQueryBuilder = new MatchQueryBuilder("user", "kimchy")
                 .fuzziness(Fuzziness.AUTO) // 模糊
                 .prefixLength(3)
                 .maxExpansions(10);
-            searchSourceBuilder.query(matchQueryBuilder);
+        searchSourceBuilder.query(matchQueryBuilder);
 
-            // Specifying Sorting
-            searchSourceBuilder.sort(new ScoreSortBuilder().order(SortOrder.DESC));
-            searchSourceBuilder.sort(new FieldSortBuilder("_uid").order(SortOrder.ASC));
+        // Specifying Sorting
+        searchSourceBuilder.sort(new ScoreSortBuilder().order(SortOrder.DESC));
+        // searchSourceBuilder.sort(new FieldSortBuilder("_uid").order(SortOrder.ASC));
 
-            // Source filtering 过滤查询字段
-            searchSourceBuilder.fetchSource(false);
-            String[] includeFields = new String[] {"user", "message"};
-            String[] excludeFields = new String[] {"reason"};
-            searchSourceBuilder.fetchSource(includeFields, excludeFields);
+        // Source filtering 过滤查询字段
+        // searchSourceBuilder.fetchSource(false);
+        String[] includeFields = new String[]{"user", "message"};
+        String[] excludeFields = new String[]{"reason"};
+        // searchSourceBuilder.fetchSource(includeFields, excludeFields);
 
-            // Requesting Highlighting
-            /**
-             * 若添加下面这段设置高亮的代码的话，就会报下面的错误,搜索了半天没有找到结果，暂时搁置在这里，之后用到再来研究解决；主要是文档里写的也不是很清楚，很难受；2017年11月21日15:40:35
-             * HTTP Status 500 - Could not write content: No serializer found for class org.elasticsearch.common.text.Text and no properties discovered to create BeanSerializer (to avoid exception, disable SerializationFeature.FAIL_ON_EMPTY_BEANS) ) (through reference chain: org.elasticsearch.action.search.SearchResponse["hits"]->org.elasticsearch.search.SearchHits["hits"]->org.elasticsearch.search.SearchHit["highlightFields"]->java.util.HashMap["user"]->org.elasticsearch.search.fetch.subphase.highlight.HighlightField["fragments"]); nested exception is com.fasterxml.jackson.databind.JsonMappingException: No serializer found for class org.elasticsearch.common.text.Text and no properties discovered to create BeanSerializer (to avoid exception, disable SerializationFeature.FAIL_ON_EMPTY_BEANS) ) (through reference chain: org.elasticsearch.action.search.SearchResponse["hits"]->org.elasticsearch.search.SearchHits["hits"]->org.elasticsearch.search.SearchHit["highlightFields"]->java.util.HashMap["user"]->org.elasticsearch.search.fetch.subphase.highlight.HighlightField["fragments"])
-             */
-            HighlightBuilder highlightBuilder = new HighlightBuilder();
-//            HighlightBuilder.Field highlightTitle =
-//                    new HighlightBuilder.Field("title");
+        // Requesting Highlighting
+        /**
+         * 若添加下面这段设置高亮的代码的话，就会报下面的错误,搜索了半天没有找到结果，暂时搁置在这里，之后用到再来研究解决；主要是文档里写的也不是很清楚，很难受；2017年11月21日15:40:35
+         * HTTP Status 500 - Could not write content: No serializer found for class org.elasticsearch.common.text.Text and no properties discovered to create BeanSerializer (to avoid exception, disable SerializationFeature.FAIL_ON_EMPTY_BEANS) ) (through reference chain: org.elasticsearch.action.search.SearchResponse["hits"]->org.elasticsearch.search.SearchHits["hits"]->org.elasticsearch.search.SearchHit["highlightFields"]->java.util.HashMap["user"]->org.elasticsearch.search.fetch.subphase.highlight.HighlightField["fragments"]); nested exception is com.fasterxml.jackson.databind.JsonMappingException: No serializer found for class org.elasticsearch.common.text.Text and no properties discovered to create BeanSerializer (to avoid exception, disable SerializationFeature.FAIL_ON_EMPTY_BEANS) ) (through reference chain: org.elasticsearch.action.search.SearchResponse["hits"]->org.elasticsearch.search.SearchHits["hits"]->org.elasticsearch.search.SearchHit["highlightFields"]->java.util.HashMap["user"]->org.elasticsearch.search.fetch.subphase.highlight.HighlightField["fragments"])\
+         * // (1)使用下面的注解无效；
+         * http://blog.csdn.net/li396864285/article/details/72961546  @JsonSerialize(include = JsonSerialize.Inclusion.NON_EMPTY)
+         * // (2)使用下面的修改配置文件，可行
+         * http://blog.csdn.net/kinginblue/article/details/51236938
+         * https://segmentfault.com/a/1190000011702922
+         *
+         * 实际上，这个问题是由于最后一步return的时候进行json序列化的时候失败导致的，究其原因应该是ES的Text类中属性没有set、get方法导致的；
+         * 但是呢，SpringMVC默认的序列化类貌似不能设置其属性，于是继承它并设置：SerializationFeature.FAIL_ON_EMPTY_BEANS 为false。
+         */
+        HighlightBuilder highlightBuilder = new HighlightBuilder();
 //            highlightTitle.highlighterType("unified");
-//            highlightBuilder.field(highlightTitle);
-            HighlightBuilder.Field highlightUser = new HighlightBuilder.Field("user");
-            highlightBuilder.field(highlightUser);
-            searchSourceBuilder.highlighter(highlightBuilder);
+        HighlightBuilder.Field highlightUser = new HighlightBuilder.Field("user");
+        highlightBuilder.field(highlightUser);
+        searchSourceBuilder.highlighter(highlightBuilder);
 
-            // Requesting Aggregations
-            // Requesting Suggestions
+        // Requesting Aggregations
+        // Requesting Suggestions ??? what?
+        // Profiling Queries and Aggregations ???
 
-            searchRequest.source(searchSourceBuilder);
+        searchRequest.source(searchSourceBuilder);
 
-            // 同步执行
-            searchResponse = client.search(searchRequest);
+        // 同步执行
+        searchResponse = client.search(searchRequest);
 
-            RestStatus status = searchResponse.status();
-            TimeValue took = searchResponse.getTook();
-            Boolean terminatedEarly = searchResponse.isTerminatedEarly();
-            boolean timedOut = searchResponse.isTimedOut();
+        RestStatus status = searchResponse.status();
+        TimeValue took = searchResponse.getTook();
+        Boolean terminatedEarly = searchResponse.isTerminatedEarly();
+        boolean timedOut = searchResponse.isTimedOut();
 
-            logger.info("+++ " + status.toString() + " " + took.toString() + " " + terminatedEarly + " " + timedOut);
+        logger.info("+++ " + status.toString() + " " + took.toString() + " " + terminatedEarly + " " + timedOut);
 
-            int totalShards = searchResponse.getTotalShards();
-            int successfulShards = searchResponse.getSuccessfulShards();
-            int failedShards = searchResponse.getFailedShards();
-            for (ShardSearchFailure failure : searchResponse.getShardFailures()) {
-                // failures should be handled here
-            }
+        int totalShards = searchResponse.getTotalShards();
+        int successfulShards = searchResponse.getSuccessfulShards();
+        int failedShards = searchResponse.getFailedShards();
+        for (ShardSearchFailure failure : searchResponse.getShardFailures()) {
+            // failures should be handled here
+        }
 
-            // Retrieving SearchHits
-            SearchHits hits = searchResponse.getHits();
-            long totalHits = hits.getTotalHits();
-            float maxScore = hits.getMaxScore();
-            SearchHit[] searchHits = hits.getHits();
-            logger.info("+++ " + totalHits + " " + maxScore);
+        // Retrieving SearchHits
+        SearchHits hits = searchResponse.getHits();
+        long totalHits = hits.getTotalHits();
+        float maxScore = hits.getMaxScore();
+        SearchHit[] searchHits = hits.getHits();
+        logger.info("+++ " + totalHits + " " + maxScore);
 
-            for (SearchHit hit : searchHits) {
-                // do something with the SearchHit
-                String index = hit.getIndex();
-                String type = hit.getType();
-                String id = hit.getId();
-                float score = hit.getScore();
-                logger.info("+++ " + index + " " + type + " " + id + " " + score);
+        for (SearchHit hit : searchHits) {
+            // do something with the SearchHit
+            String index = hit.getIndex();
+            String type = hit.getType();
+            String id = hit.getId();
+            float score = hit.getScore();
+            logger.info("+++ " + index + " " + type + " " + id + " " + score);
 
-                String sourceAsString = hit.getSourceAsString();
-                Map<String, Object> sourceAsMap = hit.getSourceAsMap();
+            String sourceAsString = hit.getSourceAsString();
+            Map<String, Object> sourceAsMap = hit.getSourceAsMap();
 //                String documentTitle = (String) sourceAsMap.get("title");
 //                List<Object> users = (List<Object>) sourceAsMap.get("user");
 //                Map<String, Object> innerObject = (Map<String, Object>) sourceAsMap.get("innerObject");
 
-                logger.info("+++ " + sourceAsString);
+            logger.info("+++ " + sourceAsString);
 
-                // Retrieving Highlighting
-                Map<String, HighlightField> highlightFields = hit.getHighlightFields();
-                HighlightField highlight = highlightFields.get("user");
-                if (highlight != null) {
-                    Text[] fragments = highlight.fragments();
-                    String fragmentString = fragments[0].string();
-                    logger.info("+++ highlight " + fragmentString);
-                }
+            // Retrieving Highlighting
+            Map<String, HighlightField> highlightFields = hit.getHighlightFields();
+            HighlightField highlight = highlightFields.get("user");
+            if (highlight != null) {
+                Text[] fragments = highlight.fragments();
+                String fragmentString = fragments[0].string();
+                logger.info("+++ highlight " + fragmentString);
             }
-            // Retrieving Aggregations
-            // Retrieving Suggestions
-            // Retrieving Profiling Results
-
-        } catch (IOException e) {
-            logger.info("+++ bao cuo la ");
-            e.printStackTrace();
-        } catch (Exception e) {
-            logger.info("+++ bao cuo la 2");
-            e.printStackTrace();
         }
+        // Retrieving Aggregations
+        // Retrieving Suggestions
+        // Retrieving Profiling Results
+
         logger.info("+++ before return ");
 
         return searchResponse;

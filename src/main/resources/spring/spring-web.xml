@@ -15,7 +15,31 @@
     a.自动注册DefaultAnnotationHandlerMapping,AnnotationMethodHandlerAdapter
     b.默认提供一系列的功能:数据绑定，数字和日期的format@NumberFormat,@DateTimeFormat
     c:xml,json的默认读写支持-->
-    <mvc:annotation-driven/>
+    <mvc:annotation-driven>
+        <mvc:message-converters>
+            <bean class="org.springframework.http.converter.StringHttpMessageConverter">
+                <property name="supportedMediaTypes">
+                    <list>
+                        <value>text/plain;charset=UTF-8</value>
+                        <value>text/html;charset=UTF-8</value>
+                    </list>
+                </property>
+            </bean>
+            <bean class="org.springframework.http.converter.json.MappingJackson2HttpMessageConverter">
+                <property name="supportedMediaTypes">
+                    <list>
+                        <value>application/json; charset=UTF-8</value>
+                        <value>application/x-www-form-urlencoded; charset=UTF-8</value>
+                    </list>
+                </property>
+                <!-- 配置 objectMapper 为我们自定义扩展后的 CustomMapper -->
+                <property name="objectMapper">
+                    <bean class="com.danke.util.json.CustomMapper">
+                    </bean>
+                </property>
+            </bean>
+        </mvc:message-converters>
+    </mvc:annotation-driven>
 
     <!--2.静态资源默认servlet配置-->
     <!--
