@@ -1,5 +1,6 @@
 package com.danke.web;
 
+import com.danke.util.es.ESTools;
 import org.apache.http.HttpHost;
 import org.elasticsearch.Build;
 import org.elasticsearch.Version;
@@ -77,9 +78,7 @@ public class ElasticSearchController {
     @ResponseBody
     public IndexResponse index() {
 
-        RestHighLevelClient client = new RestHighLevelClient(
-                RestClient.builder(
-                        new HttpHost("localhost", 9200, "http")));
+        RestHighLevelClient client = ESTools.client;
 
         // Index Request
         // Providing the document source
@@ -139,9 +138,7 @@ public class ElasticSearchController {
     @RequestMapping("/update")
     @ResponseBody
     public UpdateResponse update() {
-        RestHighLevelClient client = new RestHighLevelClient(
-                RestClient.builder(
-                        new HttpHost("localhost", 9200, "http")));
+        RestHighLevelClient client = ESTools.client;
 
         UpdateResponse updateResponse = null;
         try {
@@ -212,11 +209,7 @@ public class ElasticSearchController {
     @RequestMapping("/get")
     @ResponseBody
     public GetResponse get() {
-
-        RestHighLevelClient client = new RestHighLevelClient(
-                RestClient.builder(
-                        new HttpHost("localhost", 9200, "http")));
-
+        RestHighLevelClient client = ESTools.client;
 
         GetRequest getRequest = new GetRequest("posts", "doc", "2");
 
@@ -261,10 +254,7 @@ public class ElasticSearchController {
     @RequestMapping("/del")
     @ResponseBody
     public DeleteResponse delete() {
-
-        RestHighLevelClient client = new RestHighLevelClient(
-                RestClient.builder(
-                        new HttpHost("localhost", 9200, "http")));
+        RestHighLevelClient client = ESTools.client;
 
         DeleteRequest request = new DeleteRequest(
                 "posts",
@@ -305,9 +295,7 @@ public class ElasticSearchController {
     @RequestMapping("/search")
     @ResponseBody
     public SearchResponse search() throws IOException{
-        RestHighLevelClient client = new RestHighLevelClient(
-                RestClient.builder(
-                        new HttpHost("localhost", 9200, "http")));
+        RestHighLevelClient client = ESTools.client;
 
         SearchRequest searchRequest = new SearchRequest();
         SearchResponse searchResponse = null;
@@ -431,9 +419,7 @@ public class ElasticSearchController {
     @ResponseBody
     public SearchResponse scollSearch() throws IOException {
 
-        RestHighLevelClient client = new RestHighLevelClient(
-                RestClient.builder(
-                        new HttpHost("localhost", 9200, "http")));
+        RestHighLevelClient client = ESTools.client;
 
         // (1)Initialize the search scroll context
         // (2)Retrieve all the relevant documents
@@ -482,9 +468,7 @@ public class ElasticSearchController {
     @ResponseBody
     public BulkResponse bulk() throws IOException {
 
-        RestHighLevelClient client = new RestHighLevelClient(
-                RestClient.builder(
-                        new HttpHost("localhost", 9200, "http")));
+        RestHighLevelClient client = ESTools.client;
 
         BulkRequest request = new BulkRequest();
         request.add(new DeleteRequest("posts", "doc", "3"));
@@ -516,9 +500,7 @@ public class ElasticSearchController {
     @RequestMapping("/info")
     @ResponseBody
     public MainResponse info() throws IOException {
-        RestHighLevelClient client = new RestHighLevelClient(
-                RestClient.builder(
-                        new HttpHost("localhost", 9200, "http")));
+        RestHighLevelClient client = ESTools.client;
 
         MainResponse response = client.info();
         ClusterName clusterName = response.getClusterName();
